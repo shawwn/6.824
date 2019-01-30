@@ -1,5 +1,12 @@
 package mapreduce
 
+import (
+  "encoding/json"
+  "log"
+  "os"
+  "sort"
+)
+
 func doReduce(
 	jobName string, // the name of the whole MapReduce job
 	reduceTask int, // which reduce task this is
@@ -44,4 +51,84 @@ func doReduce(
 	//
 	// Your code here (Part I).
 	//
+
+  debug("reduce outFile %s\n", outFile)
+	file, err := os.Create(outFile);
+	if err != nil {
+		log.Fatal("check: ", err)
+	}
+	defer file.Close()
+  enc := json.NewEncoder(file)
+
+
+  i := 0
+  for {
+    if i >= nMap {
+      break
+    }
+    inFile := reduceName(jobName, reduceTask, i)
+    debug("reduce inFile %s\n", inFile)
+
+
+
+    kvs := make(map[string][]string)
+
+    in, err := os.Open(inFile)
+    if err != nil {
+      log.Fatal("Reduce: ", err)
+    }
+    defer in.Close()
+    dec := json.NewDecoder(in)
+    for {
+      var kv KeyValue
+      err = dec.Decode(&kv)
+      if err != nil {
+        break
+      }
+      kvs[kv.Key] = append(kvs[kv.Key], kv.Value)
+    }
+    var keys []string
+    for k := range kvs {
+      keys = append(keys, k)
+    }
+    sort.Strings(keys)
+
+    for i := range keys {
+      k := keys[i]
+      res := reduceF(k, kvs[k])
+      kv := KeyValue{k, res}
+      err := enc.Encode(&kv)
+      if err != nil {
+        log.Fatal("check: ", err)
+      }
+    }
+    i++
+  }
 }
+
+// 15-     debug("Merge phase")
+// 16-     kvs := make(map[string]string)
+// 17-     for i := 0; i < mr.nReduce; i++ {
+// 18-             p := mergeName(mr.jobName, i)
+// 19-             fmt.Printf("Merge: read %s\n", p)
+// 20-             file, err := os.Open(p)
+// 21-             if err != nil {
+// 22-                     log.Fatal("Merge: ", err)
+// 23-             }
+// 24:             dec := json.NewDecoder(file)
+// 25-             for {
+// 26-                     var kv KeyValue
+// 27-                     err = dec.Decode(&kv)
+// 28-                     if err != nil {
+// 29-                             break
+// 30-                     }
+// 31-                     kvs[kv.Key] = kv.Value
+// 32-             }
+// 33-             file.Close()
+// 34-     }
+// 35-     var keys []string
+// 36-     for k := range kvs {
+// 37-             keys = append(keys, k)
+// 38-     }
+// 39-     sort.Strings(keys)
+// 40-
